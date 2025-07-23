@@ -10,7 +10,7 @@ function Layout() {
   const [sidebar,setsidebar] = useState(false);
   const {user} = useUser();
     return user ? (
-      <div className='flex flex-col h-screen bg-gray-200 items-start justify-start'>
+      <div className='flex flex-col h-screen items-start justify-start'>
         <nav className='w-full px-8 min-h-14 flex items-center justify-between border-b-2 border-gray-400'>
           <img className='cursor-pointer' src={assets.logo}  alt="logo" onClick={() => navigate("/")}/>
           {
@@ -20,7 +20,7 @@ function Layout() {
         </nav>
         <div className='flex-1 w-full flex h-[calc(100vh-64px)]'>
           <Sidebar sidebar={sidebar} setsidebar={setsidebar}/>
-          <div className='flex-1 bg-[#F4F7FB'>
+          <div className='flex-1 bg-[#b9d1f1a4]'>
         <Outlet />
           </div>
         </div>
