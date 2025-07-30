@@ -6,11 +6,11 @@ import { clerkClient } from "@clerk/express";
 export const auth = async(req,res,next) => {
     try {
         const {userId,has} = await req.auth();
-        const hasPremiumPplan = has({plan: 'premium'})
+        const hasPremiumplan = await has({plan: 'premium'})
         const user = await clerkClient.users.getUser(userId);
 
-        if(!hasPremiumPplan && user.privateMetadata.free_usage){
-            req.free_usage = user.privateMetadata.free_usage;
+        if(!hasPremiumplan && user.privateMetadata.free_usage){
+            req.free_usage = user.privateMetadata.free_usage
         }else{
             await clerkClient.users.updateUserMetadata(userId,{
                 privateMetadata:{
@@ -19,7 +19,7 @@ export const auth = async(req,res,next) => {
             })
             req.free_usage = 0;
         }
-        req.plan = hasPremiumPplan ? 'premium' : 'free';
+        req.plan = hasPremiumplan ? 'premium' : 'free';
         next();
     } catch (error) {
         res.json({success:false,message : error.message});

@@ -2,6 +2,7 @@ import { clerkClient } from "@clerk/express";
 import OpenAI from "openai";
 import sql from "../configs/db.js";
 import axios from "axios";
+import {v2 as cloudinary} from 'cloudinary';
 
 const AI = new OpenAI({
     apiKey: process.env.GEMINI_API_KEY,
@@ -95,7 +96,7 @@ export const generateBlogTitle = async(req,res) => {
 export const generateImage = async(req,res) => {
    try {
      const {userId} = req.auth();
-     const {prompt} = req.body;
+     const {prompt,publish} = req.body;
      const plan = req.plan;
 
      if(plan !== 'premium') {
@@ -113,19 +114,11 @@ export const generateImage = async(req,res) => {
 
     const base64Image = `data:image/png;base64, ${Buffer.from(data,'binary').toString('base64')}`;
 
+    const {secure_url} = await cloudinary.uploader.upload(base64Image)
 
-    const content = response.choices[0].message.content;
+    await sql `INSERT INTO creations(user_id,prompt,content,type,publish) VALUES(${userId},${prompt},${secure_url},'image',${publish ?? false})`;
 
-    await sql `INSERT INTO creations(user_id,prompt,content,type) VALUES(${userId},${prompt},${content},'blog-title')`;
-
-    if(plan !== 'premium') {
-        await clerkClient.users.updateUserMetadata(userId, {
-            privateMetadata: {
-                free_usage: free_usage + 1
-            }
-        });
-    }
-    res.json({success: true, content});
+    res.json({success: true, content:secure_url});
 
    } catch (error) {
     console.log(error.message)
