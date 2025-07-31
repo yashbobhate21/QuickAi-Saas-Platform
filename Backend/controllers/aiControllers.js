@@ -3,6 +3,8 @@ import OpenAI from "openai";
 import sql from "../configs/db.js";
 import axios from "axios";
 import {v2 as cloudinary} from 'cloudinary';
+import fs from 'fs';
+import Pdf from 'pdf-parse/lib/pdf-parse.js';
 
 const AI = new OpenAI({
     apiKey: process.env.GEMINI_API_KEY,
@@ -17,8 +19,8 @@ export const generateArticle = async(req,res) => {
      const plan = req.plan;
      const free_usage = req.free_usage;
 
-     if(plan !== 'premium' && free_usage >= 10) {
-        return res.json({success: false, message: 'Free usage limit exceeded. Upgrade to premium for more requests.'});
+     if(plan !== 'Premium' && free_usage >= 10) {
+        return res.json({success: false, message: 'Free usage limit exceeded. Upgrade to Premium for more requests.'});
      }
 
     const response = await AI.chat.completions.create({
@@ -37,7 +39,7 @@ export const generateArticle = async(req,res) => {
 
     await sql `INSERT INTO creations(user_id,prompt,content,type) VALUES(${userId},${prompt},${content},'article')`;
 
-    if(plan !== 'premium') {
+    if(plan !== 'Premium') {
         await clerkClient.users.updateUserMetadata(userId, {
             privateMetadata: {
                 free_usage: free_usage + 1
@@ -59,8 +61,8 @@ export const generateBlogTitle = async(req,res) => {
      const plan = req.plan;
      const free_usage = req.free_usage;
 
-     if(plan !== 'premium' && free_usage >= 10) {
-        return res.json({success: false, message: 'Free usage limit exceeded. Upgrade to premium for more requests.'});
+     if(plan !== 'Premium' && free_usage >= 10) {
+        return res.json({success: false, message: 'Free usage limit exceeded. Upgrade to Premium for more requests.'});
      }
 
     const response = await AI.chat.completions.create({
@@ -79,7 +81,7 @@ export const generateBlogTitle = async(req,res) => {
 
     await sql `INSERT INTO creations(user_id,prompt,content,type) VALUES(${userId},${prompt},${content},'blog-title')`;
 
-    if(plan !== 'premium') {
+    if(plan !== 'Premium') {
         await clerkClient.users.updateUserMetadata(userId, {
             privateMetadata: {
                 free_usage: free_usage + 1
@@ -99,8 +101,10 @@ export const generateImage = async(req,res) => {
      const {prompt,publish} = req.body;
      const plan = req.plan;
 
-     if(plan !== 'premium') {
-        return res.json({success: false, message: 'Upgrade to premium for image generation.'});
+    console.log('User plan:', plan);
+
+     if(plan !== 'Premium') {
+        return res.json({success: false, message: 'Upgrade to Premium for image generation.'});
      }
 
     const formData = new FormData()
@@ -119,6 +123,105 @@ export const generateImage = async(req,res) => {
     await sql `INSERT INTO creations(user_id,prompt,content,type,publish) VALUES(${userId},${prompt},${secure_url},'image',${publish ?? false})`;
 
     res.json({success: true, content:secure_url});
+
+   } catch (error) {
+    console.log(error.message)
+    res.json({success: false, message: error.message});
+   }
+}
+export const RemoveImageBackground = async(req,res) => {
+   try {
+     const {userId} = req.auth();
+     const {image} = req.file;
+     const plan = req.plan;
+
+     if(plan !== 'Premium') {
+        return res.json({success: false, message: 'Upgrade to Premium for image generation.'});
+     }
+
+    
+
+    const {secure_url} = await cloudinary.uploader.upload(image.path,{
+        transformation:[
+            {
+                effect:'background_removal',
+                background_removal: 'remove_the_background'
+            }
+        ]
+    });
+
+    await sql `INSERT INTO creations(user_id,prompt,content,type) VALUES(${userId},'remove background from image',${secure_url},'image')`;
+
+    res.json({success: true, content:secure_url});
+
+   } catch (error) {
+    console.log(error.message)
+    res.json({success: false, message: error.message});
+   }
+}
+export const RemoveImageObject = async(req,res) => {
+   try {
+     const {userId} = req.auth();
+     const {object} = req.body;
+     const {image} = req.file;
+     const plan = req.plan;
+
+     if(plan !== 'Premium') {
+        return res.json({success: false, message: 'Upgrade to Premium for image generation.'});
+     }
+
+    const {public_id} = await cloudinary.uploader.upload(image.path);
+
+    const imageUrl = cloudinary.url(public_id,{
+        transformation:[{effect : `gen_remove:${object}`}],
+        resource_type:'image'
+    })
+
+    await sql `INSERT INTO creations(user_id,prompt,content,type) VALUES(${userId},${`removed ${object} from image`},${imageUrl},'image')`;
+
+    res.json({success: true, content:imageUrl});
+
+   } catch (error) {
+    console.log(error.message)
+    res.json({success: false, message: error.message});
+   }
+}
+export const ResumeReview = async(req,res) => {
+   try {
+     const {userId} = req.auth();
+     const resume = req.file;
+     const plan = req.plan;
+
+     if(plan !== 'Premium') {
+        return res.json({success: false, message: 'Upgrade to Premium for image generation.'});
+     }
+
+    if(resume > 5 * 1024 * 1024) {
+        return res.json({success: false, message: 'File size exceeds 5MB limit.'});
+    }
+
+    const dataBuffer = fs.readFileSync(resume.path);
+    const pdfData = await Pdf(dataBuffer);
+
+    const prompt = `Review the following resume and provide constructive feedback on its strengths, weaknesses, and areas for improvement. Resume Content:\n\n${pdfData.text}`
+
+    const response = await AI.chat.completions.create({
+    model: "gemini-2.0-flash",
+    messages: [
+        {
+            role: "user",
+            content: prompt,
+        },
+    ],
+    temperature: 0.7,
+    max_tokens: 1000,
+});
+
+    const content = response.choices[0].message.content;
+
+    await sql `INSERT INTO creations(user_id,prompt,content,type) VALUES(${userId},'review the uploaded resume',${content},'resume-review')`;
+
+    res.json({success: true, content});
 
    } catch (error) {
     console.log(error.message)
