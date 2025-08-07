@@ -5,6 +5,7 @@ import axios from "axios";
 import {v2 as cloudinary} from 'cloudinary';
 import fs from 'fs';
 import Pdf from 'pdf-parse/lib/pdf-parse.js';
+import FormData from 'form-data';
 
 const AI = new OpenAI({
     apiKey: process.env.GEMINI_API_KEY,
@@ -19,7 +20,7 @@ export const generateArticle = async(req,res) => {
      const plan = req.plan;
      const free_usage = req.free_usage;
 
-     if(plan !== 'Premium' && free_usage >= 10) {
+     if(plan !== 'premium' && free_usage >= 10) {
         return res.json({success: false, message: 'Free usage limit exceeded. Upgrade to Premium for more requests.'});
      }
 
@@ -39,7 +40,7 @@ export const generateArticle = async(req,res) => {
 
     await sql `INSERT INTO creations(user_id,prompt,content,type) VALUES(${userId},${prompt},${content},'article')`;
 
-    if(plan !== 'Premium') {
+    if(plan !== 'premium') {
         await clerkClient.users.updateUserMetadata(userId, {
             privateMetadata: {
                 free_usage: free_usage + 1
@@ -61,7 +62,7 @@ export const generateBlogTitle = async(req,res) => {
      const plan = req.plan;
      const free_usage = req.free_usage;
 
-     if(plan !== 'Premium' && free_usage >= 10) {
+     if(plan !== 'premium' && free_usage >= 10) {
         return res.json({success: false, message: 'Free usage limit exceeded. Upgrade to Premium for more requests.'});
      }
 
@@ -81,7 +82,7 @@ export const generateBlogTitle = async(req,res) => {
 
     await sql `INSERT INTO creations(user_id,prompt,content,type) VALUES(${userId},${prompt},${content},'blog-title')`;
 
-    if(plan !== 'Premium') {
+    if(plan !== 'premium') {
         await clerkClient.users.updateUserMetadata(userId, {
             privateMetadata: {
                 free_usage: free_usage + 1
@@ -101,9 +102,7 @@ export const generateImage = async(req,res) => {
      const {prompt,publish} = req.body;
      const plan = req.plan;
 
-    console.log('User plan:', plan);
-
-     if(plan !== 'Premium') {
+    if(plan !== 'premium') {
         return res.json({success: false, message: 'Upgrade to Premium for image generation.'});
      }
 
@@ -116,16 +115,16 @@ export const generateImage = async(req,res) => {
         responseType: 'arraybuffer',
     })
 
-    const base64Image = `data:image/png;base64, ${Buffer.from(data,'binary').toString('base64')}`;
+    const base64Image = `data:image/png;base64,${Buffer.from(data,'binary').toString('base64')}`;
 
     const {secure_url} = await cloudinary.uploader.upload(base64Image)
 
-    await sql `INSERT INTO creations(user_id,prompt,content,type,publish) VALUES(${userId},${prompt},${secure_url},'image',${publish ?? false})`;
+    await sql `INSERT INTO creations(user_id,prompt,content,type) VALUES(${userId},${prompt},${secure_url},'image')`;
 
     res.json({success: true, content:secure_url});
 
    } catch (error) {
-    console.log(error.message)
+    console.log(error);
     res.json({success: false, message: error.message});
    }
 }
@@ -135,8 +134,8 @@ export const RemoveImageBackground = async(req,res) => {
      const image = req.file;
      const plan = req.plan;
 
-     if(plan !== 'Premium') {
-        return res.json({success: false, message: 'Upgrade to Premium for image generation.'});
+     if(plan !== 'premium') {
+        return res.json({success: false, message: 'Upgrade to Premium for Background removal.'});
      }
 
     
@@ -166,8 +165,8 @@ export const RemoveImageObject = async(req,res) => {
      const image = req.file;
      const plan = req.plan;
 
-     if(plan !== 'Premium') {
-        return res.json({success: false, message: 'Upgrade to Premium for image generation.'});
+     if(plan !== 'premium') {
+        return res.json({success: false, message: 'Upgrade to Premium for Object removal.'});
      }
 
     const {public_id} = await cloudinary.uploader.upload(image.path);
@@ -192,8 +191,8 @@ export const ResumeReview = async(req,res) => {
      const resume = req.file;
      const plan = req.plan;
 
-     if(plan !== 'Premium') {
-        return res.json({success: false, message: 'Upgrade to Premium for image generation.'});
+     if(plan !== 'premium') {
+        return res.json({success: false, message: 'Upgrade to Premium for Resume review.'});
      }
 
     if(resume > 5 * 1024 * 1024) {
